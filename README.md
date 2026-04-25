@@ -4,23 +4,13 @@
 
 ---
 
-## 📸 System Overview
+## 📖 System Overview
 
 SmartTap is an automated beverage dispenser designed for events. Users tap their NFC wristband or card to authenticate, choose their drink (wine or beer), and receive a precisely measured pour — all tracked in Firebase, logged to an SD card, and controllable from a web interface.
 
 ---
 
-## 📷 Photos
-
-| System Overview | Internals |
-|---|---|
-| ![System](photos/system_overview.jpg) | ![Wiring](photos/wiring.jpg) |
-
-| LCD Display | NFC Tap |
-|---|---|
-| ![LCD](photos/lcd_display.jpg) | ![NFC](photos/nfc_tap.jpg) |
-
----
+## ✨ Features
 
 ### 🔐 NFC Authentication
 - PN532 module reads NFC UIDs and matches them to Firebase user profiles
@@ -97,35 +87,37 @@ SmartTap is an automated beverage dispenser designed for events. Users tap their
 
 ## 🔧 Hardware — Bill of Materials
 
-| Component | Notes | Link |
-|---|---|---|
-| ESP32 Dual Core Module | Main microcontroller | [Amazon](https://a.co/d/iZKP588) |
-| Peristaltic Pump 500 mL/min × 2 | Liquid delivery | [Amazon CA](https://www.amazon.ca/-/fr/dp/B085TQZM6W) |
-| DC 12V Solenoid Valve × 2 | Flow gate | [Amazon CA](https://www.amazon.ca/-/fr/dp/B07KT84NRL) |
-| Flow Sensor × 2 | Pulse-based volume measurement | [Amazon CA](https://www.amazon.ca/dp/B01D44N41U) |
-| 12V Relay Module (multi-channel) | Controls pumps & valves from 3.3V GPIO | [Amazon CA](https://www.amazon.ca/dp/B07Y8J8YXL) |
-| Mini TF SD Card Module | Local data logging (with 32 GB card) | [Amazon CA](https://www.amazon.ca/-/fr/dp/B07V78MD81) |
-| DFPlayer YX5200 | Audio feedback (with 32 GB card) | [Amazon CA](https://www.amazon.ca/-/fr/dp/B07BDD8BF3) |
-| 30 mm Speaker 8Ω | Audio output for DFPlayer | [Amazon CA](https://www.amazon.ca/-/fr/dp/B07BFTYY6L) |
-| LCD 20×4 with I2C Adapter | User-facing display | [Amazon CA](https://www.amazon.ca/-/fr/dp/B07TXBV8MS) |
-| PN532 NFC Reader | NFC tag authentication | [Amazon CA](https://www.amazon.ca/dp/B07YFX5X9Y) |
-| NFC NTAG215 Tags | User wristbands / cards | [Amazon](https://a.co/d/aPLLr4v) |
-| WS2811 LED Strip | Status lighting (controlled via WLED) | [Amazon CA](https://www.amazon.ca/dp/B01AG923GI) |
-| Wemos D1 Mini (WLED controller) | Drives the LED strip via WLED firmware | [WLED HTTP API](https://kno.wled.ge/interfaces/http-api/) |
-| Push Button × 2 (2-pin) | Resume & Cancel actions | [Amazon](https://a.co/d/4VzfrOX) |
+| Component | Notes |
+|---|---|
+| ESP32 Dual Core Module | Main microcontroller |
+| Peristaltic Pump 500 mL/min × 2 | Liquid delivery |
+| DC 12V Solenoid Valve × 2 | Flow gate |
+| Flow Sensor × 2 | Pulse-based volume measurement |
+| 12V Relay Module (multi-channel) | Controls pumps & valves from 3.3V GPIO |
+| Mini TF SD Card Module | Local data logging (with 32 GB card) |
+| DFPlayer YX5200 | Audio feedback (with 32 GB card) |
+| 30 mm Speaker 8Ω | Audio output for DFPlayer |
+| LCD 20×4 with I2C Adapter | User-facing display |
+| PN532 NFC Reader | NFC tag authentication |
+| NFC NTAG215 Tags | User wristbands / cards |
+| WS2811 LED Strip | Status lighting (controlled via WLED) |
+| Wemos D1 Mini (WLED controller) | Drives the LED strip via WLED firmware |
+| Push Button × 2 (2-pin) | Resume & Cancel actions |
 
 ---
 
 ## 📁 Repository Structure
 
 ```
-smarttap/
+(repo root)
 ├── firmware/
-│   └── nfc_tap.ino              # ESP32 firmware (Arduino IDE)
+│   ├── nfc_tap.ino                  # ESP32 firmware (Arduino IDE)
+│   └── secrets_template.h           # Copy to secrets.h and fill in your credentials
 ├── dashboard/
-│   └── esp32_dashboard_server.py  # Python TCP/Flask live dashboard
-├── docs/
-│   └── architecture.md          # Detailed system design notes
+│   ├── esp32_dashboard_server.py    # Python TCP/Flask live dashboard
+│   └── requirements.txt             # Python dependencies
+├── photos/                          # System photos and screenshots
+├── LICENSE
 └── README.md
 ```
 
@@ -139,17 +131,19 @@ smarttap/
 - Arduino IDE with ESP32 board support
 - Libraries: `Adafruit_PN532`, `ESPAsyncWebSrv`, `Firebase_ESP_Client`, `LiquidCrystal_I2C`, `SD`
 
-**Configuration** — edit the top of `nfc_tap.ino`:
+**Configuration:**
+1. Copy `secrets_template.h` and rename it `secrets.h`
+2. Fill in your credentials:
 ```cpp
-#define WIFI_SSID     "your-wifi"
-#define WIFI_PASSWORD "your-password"
-#define API_KEY       "your-firebase-api-key"
-#define DATABASE_URL  "https://your-project.firebaseio.com/"
-
-const char* host = "192.168.x.x";  // IP of the Python dashboard machine
+#define WIFI_SSID      "your-wifi-name"
+#define WIFI_PASSWORD  "your-wifi-password"
+#define API_KEY        "your-firebase-api-key"
+#define DATABASE_URL   "https://your-project-id.firebaseio.com/"
+#define DASHBOARD_HOST "192.168.x.x"  // IP of the machine running the Python dashboard
+#define WLED_HOST      "192.168.x.x"  // IP of your WLED controller
 ```
-
-Flash to your ESP32 via Arduino IDE.
+3. Place `secrets.h` in the same `firmware/` folder as `nfc_tap.ino`
+4. Flash to your ESP32 via Arduino IDE
 
 ---
 
@@ -157,7 +151,7 @@ Flash to your ESP32 via Arduino IDE.
 
 **Prerequisites:**
 ```bash
-pip install flask pywebview
+pip install -r requirements.txt
 ```
 
 **Run:**
@@ -193,7 +187,7 @@ The dashboard opens as a desktop window and listens on TCP port `12345` for the 
 }
 ```
 
-3. Add your **API key** and **database URL** to `nfc_tap.ino`
+3. Add your **API key** and **database URL** to `secrets.h`
 
 ---
 
@@ -295,7 +289,7 @@ Once the ESP32 is connected to WiFi, open `http://<ESP32-IP>` in a browser on th
 
 ## 🔒 Security Notes
 
-- Firebase credentials and WiFi passwords are stored as `#define` constants — **do not commit real credentials**. Use a `secrets.h` file (gitignored) in production.
+- All credentials (WiFi, Firebase, device IPs) are stored in `secrets.h`, which is never committed to the repo. Copy `secrets_template.h` to get started.
 - The admin web interface has no authentication by default — deploy only on trusted local networks.
 
 ---
@@ -308,5 +302,5 @@ MIT License — free to use, modify, and deploy.
 
 ## 🙋 Author
 
-Built as a real-world client deployment for automated event beverage management.  
+Built as a real-world client deployment for automated event beverage management.
 Demonstrates end-to-end integration of embedded systems, IoT networking, cloud backends, real-time control, and full-stack web development.
