@@ -10,6 +10,19 @@ SmartTap is an automated beverage dispenser designed for events. Users tap their
 
 ---
 
+## 🙋 What I Personally Built
+
+This was a solo engineering project — I independently designed, implemented, wired, and deployed the entire system from end to end. A client provided the requirements and use-case context, but all technical design, component selection, wiring, and software development were completed by me.
+
+* Embedded firmware (ESP32) — Developed the complete main.ino system, including NFC authentication via PN532, Firebase Realtime Database integration, flow meter pulse counting and calibration, pump and valve control through GPIO relays, FreeRTOS task scheduling, watchdog timer fault recovery, SD card logging, NTP time synchronization, and a full asynchronous web server hosting the admin interface.
+* Cloud backend (Firebase) — Designed the entire database architecture for users, coupon balances, pour logs, calibration values, and system configuration. Implemented all real-time read/write operations between the ESP32 and Firebase, ensuring synchronized state across hardware and cloud.
+* Embedded web interface — Built a full admin dashboard served directly from the ESP32 using dynamically generated HTML, CSS, and JavaScript. Includes user management (CRUD), pour history tracking, flow meter calibration tools, device configuration, WiFi setup, and manual hardware control.
+* Python real-time dashboard system — Developed a TCP-based communication bridge between the ESP32 and a Python backend. Built a Flask web application to display live system data and wrapped it into a desktop application using PyWebView for real-time monitoring.
+* Hardware design and integration — Personally selected all components and designed the full electrical system, including ESP32 integration, relay-controlled pump and solenoid circuits, dual flow sensor setup, NFC reader, LCD interface, DFPlayer audio module, and WLED lighting system for state-based visual feedback.
+* Deployment — Delivered and deployed as a fully functional IoT system for a real client use case involving automated beverage dispensing at live events.
+
+---
+
 ## ✨ Features
 
 ### 🔐 NFC Authentication
@@ -85,6 +98,57 @@ SmartTap is an automated beverage dispenser designed for events. Users tap their
 
 ---
 
+## 📊 System Logic
+
+Every user interaction follows this state machine:
+
+```
+┌────────────┐
+│    IDLE    │  ← Waiting for NFC tap, LCD shows "PASSEZ VOTRE TAG"
+└──────┬─────┘
+       │ NFC tag detected
+       ▼
+┌──────────────┐
+│ AUTHENTICATE │  ← UID looked up in Firebase user database
+└──────┬───────┘
+       │ UID not found → return to IDLE
+       │ UID found ↓
+       ▼
+┌──────────────┐
+│ COUPON CHECK │  ← Check account status + remaining coupon balance
+└──────┬───────┘
+       │ Inactive or 0 coupons → return to IDLE
+       │ Valid ↓
+       ▼
+┌──────────────┐
+│  SELECTION   │  ← User selects tap (Beer or Wine)
+│              │    via button input / hold action
+└──────┬───────┘
+       │ Selection confirmed ↓
+       ▼
+┌──────────────┐
+│  DISPENSE    │  ← Pump/valve activated
+│              │    Flow sensor counts pulses in real time
+│              │    LCD shows pour progress (%)
+└──────┬───────┘
+       │ Target volume reached ↓
+       ▼
+┌──────────────┐
+│ LOG & SYNC   │  ← Coupon decremented
+│              │    Pour logged to Firebase + SD card
+│              │    Timestamp + user + drink type saved
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│    IDLE      │  ← LCD resets, system ready for next user
+└──────────────┘
+```
+
+> At any point, pressing the **CANCEL** button cuts power to all pumps and valves and returns immediately to IDLE.
+
+---
+
 ## 🔧 Hardware — Bill of Materials
 
 | Component | Notes |
@@ -111,7 +175,7 @@ SmartTap is an automated beverage dispenser designed for events. Users tap their
 ```
 (repo root)
 ├── firmware/
-│   ├── nfc_tap.ino                  # ESP32 firmware (Arduino IDE)
+│   ├── main.ino                  # ESP32 firmware (Arduino IDE)
 │   └── secrets_template.h           # Copy to secrets.h and fill in your credentials
 ├── dashboard/
 │   ├── esp32_dashboard_server.py    # Python TCP/Flask live dashboard
@@ -142,7 +206,7 @@ SmartTap is an automated beverage dispenser designed for events. Users tap their
 #define DASHBOARD_HOST "192.168.x.x"  // IP of the machine running the Python dashboard
 #define WLED_HOST      "192.168.x.x"  // IP of your WLED controller
 ```
-3. Place `secrets.h` in the same `firmware/` folder as `nfc_tap.ino`
+3. Place `secrets.h` in the same `firmware/` folder as `main.ino`
 4. Flash to your ESP32 via Arduino IDE
 
 ---
