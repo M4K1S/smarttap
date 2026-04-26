@@ -10,16 +10,51 @@ SmartTap is an automated beverage dispenser designed for events. Users tap their
 
 ---
 
+## 📷 Photos & Videos
+
+| Full System (WLED active) | Wiring |
+|---|---|
+| ![WLEDs](photos/WLEDs.jpeg) | ![Wiring](photos/wiring.jpeg) |
+
+| NFC Scan | Flow Meter Wiring Diagram |
+|---|---|
+| ![NFC Scan](photos/nfc_scan1.jpeg) | ![Flow Meter](photos/flow_meter_wiring.jpeg) |
+
+### 🎥 Videos
+- [NFC Scan — UI response as user taps tag](photos/nfc_scan_vid.mov)
+- [Pour Progress — percentage tracking in real time](photos/pour_%25_vid.mov)
+
+---
+
 ## 🙋 What I Personally Built
 
-This was a solo engineering project — I independently designed, implemented, wired, and deployed the entire system from end to end. A client provided the requirements and use-case context, but all technical design, component selection, wiring, and software development were completed by me.
+This was a fully solo engineering project — I independently designed, built, wired, programmed, and deployed the entire system. The client provided only the functional requirements and real-world use case; all hardware design, firmware, backend systems, and integration work were completed by me.
 
-* Embedded firmware (ESP32) — Developed the complete main.ino system, including NFC authentication via PN532, Firebase Realtime Database integration, flow meter pulse counting and calibration, pump and valve control through GPIO relays, FreeRTOS task scheduling, watchdog timer fault recovery, SD card logging, NTP time synchronization, and a full asynchronous web server hosting the admin interface.
-* Cloud backend (Firebase) — Designed the entire database architecture for users, coupon balances, pour logs, calibration values, and system configuration. Implemented all real-time read/write operations between the ESP32 and Firebase, ensuring synchronized state across hardware and cloud.
-* Embedded web interface — Built a full admin dashboard served directly from the ESP32 using dynamically generated HTML, CSS, and JavaScript. Includes user management (CRUD), pour history tracking, flow meter calibration tools, device configuration, WiFi setup, and manual hardware control.
-* Python real-time dashboard system — Developed a TCP-based communication bridge between the ESP32 and a Python backend. Built a Flask web application to display live system data and wrapped it into a desktop application using PyWebView for real-time monitoring.
-* Hardware design and integration — Personally selected all components and designed the full electrical system, including ESP32 integration, relay-controlled pump and solenoid circuits, dual flow sensor setup, NFC reader, LCD interface, DFPlayer audio module, and WLED lighting system for state-based visual feedback.
-* Deployment — Delivered and deployed as a fully functional IoT system for a real client use case involving automated beverage dispensing at live events.
+- **Embedded firmware (ESP32)** — Developed the complete `main.ino` system, including NFC authentication via PN532, Firebase Realtime Database integration, flow meter pulse counting and calibration, pump and valve control through GPIO relays, FreeRTOS task scheduling, watchdog timer fault recovery, SD card logging, NTP time synchronization, and a full asynchronous web server hosting the admin interface
+- **Cloud backend (Firebase)** — Designed the entire database architecture for users, coupon balances, pour logs, calibration values, and system configuration. Implemented all real-time read/write operations between the ESP32 and Firebase
+- **Embedded web interface** — Built a full admin dashboard served directly from the ESP32 using dynamically generated HTML, CSS, and JavaScript. Includes user management, pour history, flow meter calibration, device configuration, WiFi setup, and manual hardware control
+- **Python real-time dashboard** — Developed a TCP-based communication bridge between the ESP32 and a Python backend. Built a Flask web application for live system monitoring and wrapped it as a desktop application using PyWebView
+- **Hardware design** — Selected all components and designed the full electrical system, including relay-controlled pump and solenoid circuits, dual flow sensor setup, NFC reader, LCD interface, DFPlayer audio module, and WLED lighting for state-based visual feedback
+- **Deployment** — Delivered as a fully functional IoT system for a real paying client for use at live events
+
+---
+
+## 📈 Impact
+
+- Deployed for real event use via a paying client
+- Automated beverage dispensing with real-time tracking and NFC-based authentication
+- Eliminated manual drink tracking and reduced misuse through per-user coupon enforcement
+- Enabled full remote system management through cloud backend and embedded web interface
+
+---
+
+## 🧠 Engineering Highlights
+
+- Real-time embedded state machine architecture running on bare metal ESP32
+- Multi-threaded system using FreeRTOS with dual-core task pinning
+- Full IoT stack: hardware → firmware → cloud → UI, built and integrated entirely from scratch
+- Hybrid communication system combining WiFi, TCP sockets, HTTP, and Firebase RTDB
+- Designed for real-world reliability in live event environments with watchdog fault recovery and local SD card fallback logging
 
 ---
 
@@ -127,21 +162,21 @@ Every user interaction follows this state machine:
        │ Selection confirmed ↓
        ▼
 ┌──────────────┐
-│  DISPENSE    │  ← Pump/valve activated
+│   DISPENSE   │  ← Pump/valve activated
 │              │    Flow sensor counts pulses in real time
 │              │    LCD shows pour progress (%)
 └──────┬───────┘
        │ Target volume reached ↓
        ▼
 ┌──────────────┐
-│ LOG & SYNC   │  ← Coupon decremented
+│  LOG & SYNC  │  ← Coupon decremented
 │              │    Pour logged to Firebase + SD card
 │              │    Timestamp + user + drink type saved
 └──────┬───────┘
        │
        ▼
 ┌──────────────┐
-│    IDLE      │  ← LCD resets, system ready for next user
+│     IDLE     │  ← LCD resets, system ready for next user
 └──────────────┘
 ```
 
@@ -175,7 +210,7 @@ Every user interaction follows this state machine:
 ```
 (repo root)
 ├── firmware/
-│   ├── main.ino                  # ESP32 firmware (Arduino IDE)
+│   ├── main.ino                     # ESP32 firmware (Arduino IDE)
 │   └── secrets_template.h           # Copy to secrets.h and fill in your credentials
 ├── dashboard/
 │   ├── esp32_dashboard_server.py    # Python TCP/Flask live dashboard
@@ -230,25 +265,11 @@ The dashboard opens as a desktop window and listens on TCP port `12345` for the 
 ### Firebase Setup
 
 1. Create a Firebase project and enable **Realtime Database**
-2. Set up the following data structure:
+2. Initialize with the following base structure:
 
-```json
-{
-  "users": {
-    "0": {
-      "firstName": "Jane",
-      "lastName": "Doe",
-      "uid": "AA:BB:CC:DD",
-      "phone": "5551234567",
-      "accountStatus": "active",
-      "beerCoupons": "5",
-      "wineCoupons": "3",
-      "beerUses": "0",
-      "wineUses": "0"
-    }
-  },
-  "pours": {}
-}
+```
+numOfNames: "0"
+numOfPours: "0"
 ```
 
 3. Add your **API key** and **database URL** to `secrets.h`
@@ -301,7 +322,7 @@ Once the ESP32 is connected to WiFi, open `http://<ESP32-IP>` in a browser on th
 | 23 | MOSI |
 | 19 | MISO |
 
-> ⚠️ **GPIO 23 conflict:** GPIO 23 is shared between SD card MOSI and Valve 1. The firmware avoids concurrent use — SD writes occur outside of active pour sequences — but be mindful of this if extending the codebase.
+> ⚠️ **GPIO 23 note:** GPIO 23 is shared between SD card MOSI and Valve control. Firmware scheduling ensures no concurrent usage during active dispensing cycles.
 
 ### NFC — PN532 (I2C)
 
