@@ -1,22 +1,33 @@
-// ============================================================
-// secrets_template.h — Configuration template
-// ============================================================
-// 1. Copy this file and rename it to secrets.h
-// 2. Fill in your actual credentials below
-// 3. secrets.h is listed in .gitignore and will NOT be committed
-// ============================================================
+/**
+ * SmartTap — Secrets Template
+ * ===========================
+ * Copy this file, rename it to secrets.h, and fill in your values.
+ * secrets.h is listed in .gitignore and should never be committed.
+ */
 
+#ifndef SECRETS_H
+#define SECRETS_H
+
+// ─────────────────────────────────────────────
+// Wi-Fi credentials
+// ─────────────────────────────────────────────
 #define WIFI_SSID     "your-wifi-name"
 #define WIFI_PASSWORD "your-wifi-password"
 
-// Firebase project API key (found in Project Settings > General)
+// ─────────────────────────────────────────────
+// Firebase Realtime Database
+// API key: Firebase Project Settings > General
+// Database URL: Firebase Realtime Database URL
+// ─────────────────────────────────────────────
 #define API_KEY       "your-firebase-api-key"
-
-// Firebase Realtime Database URL
 #define DATABASE_URL  "https://your-project-id.firebaseio.com/"
 
-// Local IP of the machine running esp32_dashboard_server.py
+// ─────────────────────────────────────────────
+// Local network services
+// DASHBOARD_HOST: IP of the computer running dashboard server
+// WLED_HOST: IP of the WLED controller
+// ─────────────────────────────────────────────
 #define DASHBOARD_HOST "192.168.x.x"
-
-// Local IP of the WLED controller
 #define WLED_HOST      "192.168.x.x"
+
+#endif // SECRETS_H

@@ -318,7 +318,6 @@ function submitUserInput(option) {\
     window.location.href = '/rename?renameMeter=' + meterToRename + '&newName=' + encodeURIComponent(newName);\
   }\
 }\
-document.getElementById('userInput').focus();\
 </script>";
   return mainPage;
 }
@@ -394,7 +393,6 @@ function submitUserInput(option, userIndex) {\
     window.location.href = '/deleteUser?userToDelete=' + userIndex;\
   }\
 }\
-document.getElementById('userInput').focus();\
 </script>";
   return userPage;
 }
@@ -496,7 +494,6 @@ function submitUserInput(option, pourIndex) {\
     window.location.href = '/deletePour?pourToDelete=' + pourIndex;\
   }\
 }\
-document.getElementById('userInput').focus();\
 </script>";
   return poursPage;
 }
@@ -759,12 +756,17 @@ void handleUpdatePage(AsyncWebServerRequest *request) {
 
 void handleCalibrateMeter(AsyncWebServerRequest *request) {
   int meterToCalibrate = request->arg("meter").toInt();
+  if (meterToCalibrate < 0 || meterToCalibrate >= 2) {
+    request->send(400, "text/plain", "Invalid Flow Meter number");
+    return;
+  }
+
   if (request->method() == HTTP_GET) {
-    startCalibration(request);
+    // Only render the calibration page here. Starting the pump happens only
+    // after the operator presses START on the calibration page.
     String calibratePage = generateCalibratePage(meterToCalibrate);
     request->send(200, "text/html", calibratePage);
   } else if (request->method() == HTTP_POST) {
-    float mlpumped = request->arg("mlpumped").toFloat();
     stopCalibration(request);
   } else {
     request->send(405, "text/plain", "Method Not Allowed");
@@ -772,7 +774,7 @@ void handleCalibrateMeter(AsyncWebServerRequest *request) {
 }
 
 void handleResetAll(AsyncWebServerRequest *request) {
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 2; i++) {
     resetFlowMeter(i);
   }
   request->send(200, "text/html", generateMainPage());
@@ -780,7 +782,12 @@ void handleResetAll(AsyncWebServerRequest *request) {
 
 void handlepumpVolume(AsyncWebServerRequest *request) {
   Serial.println(request->arg("_pumpVolume"));
-  pumpVolume = request->arg("_pumpVolume").toInt();
+  int requestedVolume = request->arg("_pumpVolume").toInt();
+  if (requestedVolume <= 0) {
+    request->send(400, "text/plain", "Pump volume must be greater than 0");
+    return;
+  }
+  pumpVolume = requestedVolume;
   Serial.println(pumpVolume);
   syncAmount = true;
   request->send(200, "text/html", generateMainPage());
@@ -788,7 +795,12 @@ void handlepumpVolume(AsyncWebServerRequest *request) {
 
 void handlepumpVolume2(AsyncWebServerRequest *request) {
   Serial.println(request->arg("_pumpVolume2"));
-  pumpVolume2 = request->arg("_pumpVolume2").toInt();
+  int requestedVolume = request->arg("_pumpVolume2").toInt();
+  if (requestedVolume <= 0) {
+    request->send(400, "text/plain", "Pump volume must be greater than 0");
+    return;
+  }
+  pumpVolume2 = requestedVolume;
   Serial.println(pumpVolume2);
   syncAmount = true;
   request->send(200, "text/html", generateMainPage());
@@ -799,14 +811,14 @@ void handleFlowMeterRename(AsyncWebServerRequest *request) {
   String newName = request->arg("newName");
   int meterIndex = meterToRename.toInt() - 1;
 
-  if (meterIndex >= 0 && meterIndex < 8) {
-    flowMeterNames[meterIndex] = newName;
-
-  } else {
+  if (meterIndex < 0 || meterIndex >= 2 || newName.length() == 0) {
     request->send(400, "text/plain", "Invalid Flow Meter number");
+    return;
   }
+
+  flowMeterNames[meterIndex] = newName;
   syncFlowName = true;
-      request->send(200, "text/html", generateMainPage());
+  request->send(200, "text/html", generateMainPage());
 }
 
 void handleStartPump(AsyncWebServerRequest *request) {
@@ -912,6 +924,11 @@ void handleNewUser(AsyncWebServerRequest *request) {
   newBeerCoupons = request->arg("beerCoupons");
   newWineCoupons = request->arg("wineCoupons");
 
+  if (lastNameRead + 1 >= numOfUsers) {
+    request->send(400, "text/plain", "User limit reached");
+    return;
+  }
+
   numOfNames++;
   lastNameRead++;
   first[lastNameRead] = newFirstName;
@@ -943,61 +960,85 @@ void handleEditUser(AsyncWebServerRequest *request) {
   beerUsesEdit = request->arg("beerUses");
   wineUsesEdit = request->arg("wineUses");
 
-  first[userToEdit.toInt()] = userFirstName;
-  last[userToEdit.toInt()] = userLastName;
-  uid[userToEdit.toInt()] = userUID;
-  phone[userToEdit.toInt()] = userPhone;
-  status[userToEdit.toInt()] = accountStatus;
-  beerCoupons[userToEdit.toInt()] = beerCouponsEdit;
-  wineCoupons[userToEdit.toInt()] = wineCouponsEdit;
-  beerUses[userToEdit.toInt()] = beerUsesEdit;
-  wineUses[userToEdit.toInt()] = wineUsesEdit;
+  int editIndex = userToEdit.toInt();
+  if (editIndex <= 0 || editIndex >= numOfUsers) {
+    request->send(400, "text/plain", "Invalid user index");
+    return;
+  }
+
+  first[editIndex] = userFirstName;
+  last[editIndex] = userLastName;
+  uid[editIndex] = userUID;
+  phone[editIndex] = userPhone;
+  status[editIndex] = accountStatus;
+  beerCoupons[editIndex] = beerCouponsEdit;
+  wineCoupons[editIndex] = wineCouponsEdit;
+  beerUses[editIndex] = beerUsesEdit;
+  wineUses[editIndex] = wineUsesEdit;
 
   setPeopleStrings();
-  syncNames = userToEdit.toInt();
+  syncNames = editIndex;
 
   request->send(200, "text/html", generateUserPage());
 }
 
 void handleDeleteUser(AsyncWebServerRequest *request) {
   userToDelete = request->arg("userToDelete");
-  first[userToDelete.toInt()] = "deleted";
-  last[userToDelete.toInt()] = "";
-  uid[userToDelete.toInt()] = "";
-  phone[userToDelete.toInt()] = "";
-  status[userToDelete.toInt()] = "";
-  beerCoupons[userToDelete.toInt()] = "";
-  wineCoupons[userToDelete.toInt()] = "";
-  beerUses[userToDelete.toInt()] = "";
-  wineUses[userToDelete.toInt()] = "";
+  int deleteIndex = userToDelete.toInt();
+  if (deleteIndex <= 0 || deleteIndex >= numOfUsers) {
+    request->send(400, "text/plain", "Invalid user index");
+    return;
+  }
+
+  first[deleteIndex] = "deleted";
+  last[deleteIndex] = "";
+  uid[deleteIndex] = "";
+  phone[deleteIndex] = "";
+  status[deleteIndex] = "";
+  beerCoupons[deleteIndex] = "";
+  wineCoupons[deleteIndex] = "";
+  beerUses[deleteIndex] = "";
+  wineUses[deleteIndex] = "";
   setPeopleStrings();
-  syncNames = userToDelete.toInt();
+  syncNames = deleteIndex;
   numOfNames--;
   request->send(200, "text/html", generateUserPage());
 }
 
 void handleDeletePour(AsyncWebServerRequest *request) {
-  Serial.println("DELETING USER");
+  Serial.println("DELETING POUR");
   pourToDelete = request->arg("pourToDelete");
-  poursString[pourToDelete.toInt()] = "DeletePours";
-  syncPours = pourToDelete.toInt();
+  int deletePourIndex = pourToDelete.toInt();
+  if (deletePourIndex <= 0 || deletePourIndex >= 200) {
+    request->send(400, "text/plain", "Invalid pour index");
+    return;
+  }
+
+  poursString[deletePourIndex] = "DeletePours";
+  syncPours = deletePourIndex;
   numOfPours--;
   request->send(200, "text/html", generatePoursPage());
 }
 void startCalibration(AsyncWebServerRequest *request) {
   Serial.println("Starting Calibration");
   int meterToCalibrate = request->arg("meter").toInt();
+  if (meterToCalibrate < 0 || meterToCalibrate >= 2) {
+    request->send(400, "text/plain", "Invalid Flow Meter number");
+    return;
+  }
+
   calibratingMeter = meterToCalibrate;
   calibrationStart = *pulses[meterToCalibrate];
   Serial.println(meterToCalibrate);
   calibrationPulses = 0;
-  if (meterToCalibrate == 0){
-  digitalWrite(pump_pin, HIGH);
+
+  if (meterToCalibrate == 0) {
+    digitalWrite(pump_pin, HIGH);
   } else {
-  digitalWrite(pump_pin2, HIGH);
+    digitalWrite(pump_pin2, HIGH);
   }
-  String calibratePage = generateCalibratePage(meterToCalibrate);
-  request->send(200, "text/html", calibratePage);
+
+  request->send(200, "text/plain", "Calibration started");
 }
 
 void stopCalibration(AsyncWebServerRequest *request) {
@@ -1011,18 +1052,20 @@ void stopCalibration(AsyncWebServerRequest *request) {
     String mlpumpedStr = request->arg("mlpumped");
     mlpumped = mlpumpedStr.toFloat();
 
-    if (mlpumped > 0) {
+    long pulseDelta = calibrationPulses - calibrationStart;
+
+    if (mlpumped > 0 && pulseDelta > 0) {
       Serial.println(meterToCalibrate + 1);
       Serial.println(calibrationPulses);
-      Serial.println(calibrationPulses - calibrationStart);
-      calibrationAmount = mlpumped / (calibrationPulses - calibrationStart);
+      Serial.println(pulseDelta);
+      calibrationAmount = mlpumped / pulseDelta;
       flowMeterCalibrations[calibratingMeter] = calibrationAmount;
-      Serial.println("Calibration for Flow Meter " + String(meterToCalibrate + 1) + " complete with " + flowMeterCalibrations[calibratingMeter] + " pulse/ml");
+      Serial.println("Calibration for Flow Meter " + String(meterToCalibrate + 1) + " complete with " + flowMeterCalibrations[calibratingMeter] + " ml/pulse");
       syncCalibration = true;
       request->send(200, "text/html", generateMainPage());
     } else {
       Serial.println("Calibration for Flow Meter " + String(meterToCalibrate + 1) + " aborted");
-      request->send(200, "text/html", generateMainPage());
+      request->send(400, "text/plain", "Invalid calibration amount or no pulses detected");
     }
     calibratingMeter = -1;  // Reset calibration state
     calibrationPulses = 0;
@@ -1145,7 +1188,7 @@ void readPeopleString() {
     int foundNames = 0;
     int i = 1;
 
-    while (foundNames < numOfNames) {
+    while (foundNames < numOfNames && i < numOfUsers) {
         String path = "people/people" + String(i);
 
         if (Firebase.RTDB.getString(&fbdo, path.c_str())) {
@@ -1209,7 +1252,7 @@ void readPoursString() {
     int foundPours = 0;
     int i = 1;
 
-    while (foundPours < numOfPours) {
+    while (foundPours < numOfPours && i < 200) {
         String path = "pours/pour" + String(i);
 
         if (Firebase.RTDB.getString(&fbdo, path.c_str())) {
@@ -1484,7 +1527,7 @@ void writeTask(void *parameter) {
         String calpath = "calibration";
         String calstring = String(flowMeterCalibrations[0]) + "_" + String(flowMeterCalibrations[1]);
         // Update the user data in Firebase by marking it as deleted
-        if (Firebase.RTDB.setString(&fbdo, calpath.c_str(), flowMeterCalibrations[0])) {
+        if (Firebase.RTDB.setString(&fbdo, calpath.c_str(), calstring)) {
           Serial.println("Calibration set successfully!");
         } else {
           Serial.println("Error marking user data as deleted in Firebase: " + fbdo.errorReason());
@@ -1571,7 +1614,7 @@ void setup() {
   // Route for root / web page
   server.on("/", HTTP_GET, handleMainPage);
   server.on("/calibrateMeter", HTTP_GET, handleCalibrateMeter);
-  server.on("/startCalibration", HTTP_GET, startCalibration);
+  server.on("/startCalibration", HTTP_POST, startCalibration);
   server.on("/stopCalibration", HTTP_POST, stopCalibration);
   server.on("/resetAll", HTTP_GET, handleResetAll);
   server.on("/rename", HTTP_GET, handleFlowMeterRename);
@@ -1716,6 +1759,8 @@ void loop() {
       Serial.println(beerCoupons[personToRead]);
       Serial.print("Uses");
       Serial.println(beerUses[personToRead]);
+      setPeopleStrings();
+      syncNames = personToRead;
 
 
       // Format the time as hh/mm
@@ -1774,26 +1819,28 @@ if (pumpRunning && tap == 1) {
       lcd.print("PRET!");
       lcd.setCursor(0, 1);
       lcd.print("DEGUSTEZ!");
-      if (beerCoupons[personToRead].toInt() != 1000) {
-        int beerCouponsValue = beerCoupons[personToRead].toInt();
-        Serial.print("beercouponsvalue: ");
-        Serial.println(String(beerCouponsValue));
+      if (wineCoupons[personToRead].toInt() != 1000) {
+        int wineCouponsValue = wineCoupons[personToRead].toInt();
+        Serial.print("winecouponsvalue: ");
+        Serial.println(String(wineCouponsValue));
         // Perform the decrement operation
-        beerCouponsValue--;
-        
-        Serial.print("beercouponsvalue: ");
-        Serial.println(String(beerCouponsValue));
+        wineCouponsValue--;
+
+        Serial.print("winecouponsvalue: ");
+        Serial.println(String(wineCouponsValue));
         // Convert the integer back to string
-        beerCoupons[personToRead] = String(beerCouponsValue);
-        
+        wineCoupons[personToRead] = String(wineCouponsValue);
+
       }
       int wineUsesValue = wineUses[personToRead].toInt();
       wineUsesValue++;
       wineUses[personToRead] = String(wineUsesValue);
-      Serial.print("Coupons Remaining: ");
-      Serial.println(beerCoupons[personToRead]);
+      Serial.print("Wine Coupons Remaining: ");
+      Serial.println(wineCoupons[personToRead]);
       Serial.print("Wine Uses Remaining: ");
       Serial.println(wineUses[personToRead]);
+      setPeopleStrings();
+      syncNames = personToRead;
 
 
       // Format the time as hh/mm
@@ -1814,8 +1861,10 @@ if (pumpRunning && tap == 1) {
       Serial.print("Formatted Save: ");
       Serial.print(formattedPourSave);
       numOfPours++;
-      poursString[numOfPours] = formattedPourSave;
-      syncPours = numOfPours;
+      lastPourRead++;
+      poursString[lastPourRead] = formattedPourSave;
+      syncPours = lastPourRead;
+      pourNumber[numOfPours] = lastPourRead;
       delay(4000);
       lcd.clear();
       lcd.setCursor(0, 0);
