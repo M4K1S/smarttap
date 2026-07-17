@@ -18,9 +18,11 @@
 // Firebase Realtime Database
 // API key: Firebase Project Settings > General
 // Database URL: Firebase Realtime Database URL
+// Firebase Password: Set to something secure
 // ─────────────────────────────────────────────
 #define API_KEY       "your-firebase-api-key"
 #define DATABASE_URL  "https://your-project-id.firebaseio.com/"
+#define FIREBASE_PASSWORD "your-firebase-password"
 
 // ─────────────────────────────────────────────
 // Local network services

@@ -1,5 +1,5 @@
 #include <Wire.h>
-#include <ESPAsyncWebSrv.h>
+#include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 #include <SPI.h>
 #include <SD.h>
@@ -11,6 +11,8 @@
 #include <esp_task_wdt.h>
 #include <HTTPClient.h>
 #include "time.h"
+#include <functional>
+#include <memory>
 
 #include "secrets.h"
 
@@ -21,8 +23,8 @@ AsyncWebServer server(80);
 #define I2C_ADDR (0x27)  // Check I2C of your adapter
 #define LCD_COLS (20)
 #define LCD_ROWS (4)
-#define SENSOR_PIN 27
-#define SENSOR_PIN2 26
+#define SENSOR_PIN 34
+#define SENSOR_PIN2 35
 
 // Mac (server) IP address
 const char* host = DASHBOARD_HOST;  // Defined in secrets.h
@@ -109,8 +111,6 @@ String wineCouponsEdit = "";
 String beerUsesEdit = "";
 String wineUsesEdit = "";
 
-
-String people[numOfUsers];  // Array of names
 String first[numOfUsers];
 String last[numOfUsers];
 String uid[numOfUsers];
@@ -131,7 +131,7 @@ bool nfcWorking = false;
 
 int valve_pin = 23;
 int pump_pin = 13;
-int valve_pin2 = 32;
+int valve_pin2 = 14;
 int pump_pin2 = 33;
 int pumpVolume = 30;
 int pumpVolume2 = 30;
@@ -195,69 +195,135 @@ String generateMainPage() {
   String mainPage = "\
 <html>\
 <head>\
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
   <style>\
+    * {\
+      box-sizing: border-box;\
+    }\
     body {\
       text-align: center;\
       font-family: Arial, sans-serif;\
-      font-size: 250%; /* Moderate size increase */\
+      font-size: 100%;\
       margin: 0;\
-      padding: 0;\
+      padding: 10px;\
+      background-color: #f2f2f2;\
     }\
     h1 {\
-      font-size: 3em;\
+      font-size: 1.8em;\
+      margin: 5px 0;\
     }\
     h2 {\
-      font-size: 2.5em;\
+      font-size: 1.3em;\
+      margin: 8px 0;\
     }\
     h3 {\
-      font-size: 2em;\
+      font-size: 1em;\
+      margin: 5px 0;\
+      font-weight: normal;\
+      color: #555;\
     }\
     h4 {\
-      font-size: 1.8em;\
+      font-size: 1em;\
+      margin: 5px 0;\
+      font-weight: normal;\
+    }\
+    .top-actions {\
+      display: flex;\
+      gap: 10px;\
+      justify-content: center;\
+      flex-wrap: wrap;\
+      margin-bottom: 15px;\
+    }\
+    .top-actions button {\
+      width: auto;\
+      min-width: 160px;\
+    }\
+    .totals-box {\
+      background: white;\
+      border-radius: 8px;\
+      padding: 10px 15px;\
+      margin: 0 auto 15px auto;\
+      max-width: 700px;\
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);\
+    }\
+    .meters-grid {\
+      display: grid;\
+      grid-template-columns: 1fr 1fr;\
+      gap: 15px;\
+      max-width: 900px;\
+      margin: 0 auto;\
+    }\
+    @media (max-width: 700px) {\
+      .meters-grid {\
+        grid-template-columns: 1fr;\
+      }\
+    }\
+    .meter-card {\
+      background: white;\
+      border-radius: 8px;\
+      padding: 12px;\
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);\
     }\
     button {\
       display: block;\
-      width: 80%;\
-      max-width: 400px;\
-      padding: 25px;\
-      margin: 15px auto;\
-      font-size: 1.8em;\
-      background-color: #808080; /* Gray background */\
+      width: 100%;\
+      padding: 12px;\
+      margin: 8px 0;\
+      font-size: 1em;\
+      background-color: #6c6c6c;\
       color: white;\
       border: none;\
       border-radius: 5px;\
       cursor: pointer;\
     }\
     button:hover {\
-      background-color: #666666;\
+      background-color: #4d4d4d;\
     }\
-    p {\
-      font-size: 2em;\
+    button.start {\
+      background-color: #2e7d32;\
+    }\
+    button.start:hover {\
+      background-color: #1b5e20;\
+    }\
+    p.ip {\
+      font-size: 0.85em;\
+      color: #777;\
+      margin-top: 15px;\
     }\
   </style>\
 </head>\
 <body>\
 <h1>Wine Machine</h1>\
-<h3>v0.50<br></h3>\
-<button onclick=\"submitUserInput(10)\">Manage Users</button><br>\
-<button onclick=\"submitUserInput(11)\">Previous Pours</button><br>\
-<h2>Current totals</h2>\
-<h4>" + flowMeterData() + "</h4>\
-<h2>" + flowMeterNames[0] + "</h2>\
-<button onclick=\"submitUserInput(7)\">Change Pump Volume (Current: " + String(pumpVolume) + ")</button><br>\
-<button onclick=\"submitUserInput(1)\">Calibrate Flow Meter</button><br>\
-<button onclick=\"submitUserInput(9)\">Rename Flow Meter</button><br>\
-<button onclick=\"submitUserInput(5)\">Toggle Valve (Current Status: " + valveStatus + ")</button><br>\
-<button onclick=\"submitUserInput(6)\">Toggle Pump (Current Status: " + pumpStatus + ")</button><br>\
-<button onclick=\"submitUserInput(8)\">Start Pump</button><br>\
-<h2>" + flowMeterNames[1] + "</h2>\
-<button onclick=\"submitUserInput(4)\">Change Pump Volume (Current: " + String(pumpVolume2) + ")</button><br>\
-<button onclick=\"submitUserInput(13)\">Calibrate Flow Meter</button><br>\
-<button onclick=\"submitUserInput(14)\">Rename Flow Meter</button><br>\
-<button onclick=\"submitUserInput(15)\">Toggle Valve (Current Status: " + valveStatus2 + ")</button><br>\
-<button onclick=\"submitUserInput(16)\">Toggle Pump (Current Status: " + pumpStatus2 + ")</button><br>\
-<button onclick=\"submitUserInput(17)\">Start Pump</button><br>\
-<p>IP Address: " + WiFi.localIP().toString() + "</p>\
+<h3>v0.50</h3>\
+<div class=\"top-actions\">\
+  <button onclick=\"submitUserInput(10)\">Manage Users</button>\
+  <button onclick=\"submitUserInput(11)\">Previous Pours</button>\
+</div>\
+<div class=\"totals-box\">\
+  <h2>Current Totals</h2>\
+  <h4>" + flowMeterData() + "</h4>\
+</div>\
+<div class=\"meters-grid\">\
+  <div class=\"meter-card\">\
+    <h2>" + flowMeterNames[0] + "</h2>\
+    <button onclick=\"submitUserInput(7)\">Change Pump Volume (Current: " + String(pumpVolume) + ")</button>\
+    <button onclick=\"submitUserInput(1)\">Calibrate Flow Meter</button>\
+    <button onclick=\"submitUserInput(9)\">Rename Flow Meter</button>\
+    <button onclick=\"submitUserInput(5)\">Toggle Valve (Status: " + valveStatus + ")</button>\
+    <button onclick=\"submitUserInput(6)\">Toggle Pump (Status: " + pumpStatus + ")</button>\
+    <button class=\"start\" onclick=\"submitUserInput(8)\">Start Pump</button>\
+  </div>\
+  <div class=\"meter-card\">\
+    <h2>" + flowMeterNames[1] + "</h2>\
+    <button onclick=\"submitUserInput(4)\">Change Pump Volume (Current: " + String(pumpVolume2) + ")</button>\
+    <button onclick=\"submitUserInput(13)\">Calibrate Flow Meter</button>\
+    <button onclick=\"submitUserInput(14)\">Rename Flow Meter</button>\
+    <button onclick=\"submitUserInput(15)\">Toggle Valve (Status: " + valveStatus2 + ")</button>\
+    <button onclick=\"submitUserInput(16)\">Toggle Pump (Status: " + pumpStatus2 + ")</button>\
+    <button class=\"start\" onclick=\"submitUserInput(17)\">Start Pump</button>\
+  </div>\
+</div>\
+<p class=\"ip\">IP Address: " + WiFi.localIP().toString() + "</p>\
 </body>\
 </html>\
 <script>\
@@ -322,57 +388,97 @@ function submitUserInput(option) {\
   return mainPage;
 }
 
-
-
-String generateUserPage() {
-  String userPage = "\
+String userPageHeaderHTML() {
+  return String("\
 <html>\
+<head>\
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
+  <style>\
+    * { box-sizing: border-box; }\
+    body {\
+      text-align: center;\
+      font-family: Arial, sans-serif;\
+      font-size: 100%;\
+      margin: 0;\
+      padding: 10px;\
+      background-color: #f2f2f2;\
+    }\
+    h1 { font-size: 1.8em; margin: 5px 0; }\
+    h2 { font-size: 1.3em; margin: 8px 0; }\
+    h3 { font-size: 1em; margin: 5px 0; font-weight: normal; color: #555; }\
+    .top-actions {\
+      display: flex; gap: 10px; justify-content: center;\
+      flex-wrap: wrap; margin-bottom: 15px;\
+    }\
+    .top-actions button { width: auto; min-width: 160px; }\
+    .users-grid {\
+      display: grid;\
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));\
+      gap: 15px;\
+      max-width: 1100px;\
+      margin: 0 auto;\
+      text-align: left;\
+    }\
+    .user-card {\
+      background: white;\
+      border-radius: 8px;\
+      padding: 14px;\
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);\
+    }\
+    .user-card .name { font-size: 1.1em; font-weight: bold; margin-bottom: 8px; }\
+    .user-card .detail { font-size: 0.85em; color: #444; margin: 3px 0; }\
+    .user-card .actions { display: flex; gap: 8px; margin-top: 10px; }\
+    .user-card .actions button { margin: 0; flex: 1; font-size: 0.85em; padding: 8px; }\
+    button {\
+      display: block; width: 100%; padding: 12px; margin: 8px 0;\
+      font-size: 1em; background-color: #6c6c6c; color: white;\
+      border: none; border-radius: 5px; cursor: pointer;\
+    }\
+    button:hover { background-color: #4d4d4d; }\
+    button.add {\
+      background-color: #2e7d32; max-width: 300px; margin: 20px auto 0 auto;\
+    }\
+    button.add:hover { background-color: #1b5e20; }\
+    button.delete-button { background-color: #b71c1c; }\
+    button.delete-button:hover { background-color: #7f1313; }\
+    p.ip { font-size: 0.85em; color: #777; margin-top: 20px; }\
+  </style>\
+</head>\
 <body>\
-<center>\
 <h1>Manage Users</h1>\
-<h3>v0.01e<br></h3>\
-</center>\
+<h3>v0.01e</h3>\
+<div class=\"top-actions\">\
+  <button onclick=\"submitUserInput(5)\">Go Back To Main Page</button>\
+</div>\
 <h2>All Users</h2>\
-<h3>\
-<button onclick=\"submitUserInput(5)\">Go Back To Main Page</button><br>\
-</h3>";
-
-  int j = 0;
-  for (int i = 1; i <= numOfNames + j; i++) {
-    // Check if the user has been deleted or if the first name is null or empty
-    if (first[i] != "deleted" && !first[i].isEmpty()) {
-      String firstName = first[i];
-      String lastName = last[i];
-      String nfcUid = uid[i];
-      String phoneNum = phone[i];
-      String numWineUses = wineUses[i];
-      String numBeerUses = beerUses[i];
-      String accStatus = status[i];
-      String numBeerCoupons = beerCoupons[i];
-      String numWineCoupons = wineCoupons[i];
-      String numUses = String(numWineUses.toInt() + numBeerUses.toInt());
-
-      userPage += "<b>" + firstName + " " + lastName + "</b>\
-            <button onclick=\"submitUserInput(2, "
-                  + String(i) + ")\">Edit User</button>\
-            <button onclick=\"submitUserInput(7, "
-                  + String(i) + ")\">Delete User</button><br>";
-      userPage += "<small>NFC UID: " + nfcUid + "<br>";
-      userPage += "Phone Number: " + phoneNum + "<br>";
-      userPage += "Number of uses: " + numUses + " (Beer Uses: " + numBeerUses + " Wine Uses: " + numWineUses + ")" + "<br>";
-      userPage += "Account Status: " + accStatus + "<br>";
-      userPage += "Beer Coupons Remaining: " + numBeerCoupons + "<br>";
-      userPage += "Wine Coupons Remaining: " + numWineCoupons + "</small><br><br>";
-    } else {
-      j++;
-    }
-  }
-
-  userPage += "\
-<button onclick=\"submitUserInput(1)\">Add User</button><br>\
-</h3>\
-<p>IP Address: "
-              + WiFi.localIP().toString() + "</p>\
+<div class=\"users-grid\">");
+}
+ 
+String userCardHTML(int i) {
+  String card;
+  card.reserve(500);
+  String numUses = String(wineUses[i].toInt() + beerUses[i].toInt());
+  card += "<div class=\"user-card\">";
+  card += "<div class=\"name\">" + first[i] + " " + last[i] + "</div>";
+  card += "<div class=\"detail\">NFC UID: " + uid[i] + "</div>";
+  card += "<div class=\"detail\">Phone: " + phone[i] + "</div>";
+  card += "<div class=\"detail\">Uses: " + numUses + " (Beer: " + beerUses[i] + ", Wine: " + wineUses[i] + ")</div>";
+  card += "<div class=\"detail\">Status: " + status[i] + "</div>";
+  card += "<div class=\"detail\">Beer Coupons: " + beerCoupons[i] + "</div>";
+  card += "<div class=\"detail\">Wine Coupons: " + wineCoupons[i] + "</div>";
+  card += "<div class=\"actions\">";
+  card += "<button onclick=\"submitUserInput(2, " + String(i) + ")\">Edit</button>";
+  card += "<button class=\"delete-button\" onclick=\"submitUserInput(7, " + String(i) + ")\">Delete</button>";
+  card += "</div></div>";
+  return card;
+}
+ 
+String userPageFooterHTML() {
+  String footer;
+  footer.reserve(1200);
+  footer += "</div>\
+<button class=\"add\" onclick=\"submitUserInput(1)\">Add User</button>\
+<p class=\"ip\">IP Address: " + WiFi.localIP().toString() + "</p>\
 </body>\
 </html>\
 <script>\
@@ -381,12 +487,6 @@ function submitUserInput(option, userIndex) {\
     window.location.href = '/newUserPage';\
   } else if (option == 2) {\
     window.location.href = '/editUserPage?userToEdit=' + userIndex;\
-  } else if (option == 6) {\
-    var couponType = prompt('Type of Coupon (B = Beer, W = Wine)');\
-    var numOfCoupons = prompt('Enter Amount of Coupons');\
-    window.location.href = '/addCoupons?userToCoupons=' + userIndex + '&couponType=' + encodeURIComponent(couponType) + '&numOfCoupons=' + encodeURIComponent(numOfCoupons);\
-  } else if (option == 4) {\
-    window.location.href = '/updatePage';\
   } else if (option == 5) {\
     window.location.href = '/';\
   } else if (option == 7) {\
@@ -394,9 +494,77 @@ function submitUserInput(option, userIndex) {\
   }\
 }\
 </script>";
-  return userPage;
+  return footer;
 }
-
+ 
+// Shared state for one in-progress chunked response.
+// A shared_ptr keeps it alive across the multiple callback invocations
+// the server will make while streaming this one page to one client.
+struct UserPageStreamState {
+  bool headerSent = false;
+  bool footerSent = false;
+  bool done = false;
+  int i = 1;          // current index into first[]/last[]/etc
+  String buffer = ""; // holds whatever partial content is left to flush
+  size_t bufferPos = 0;
+};
+ 
+void handleUserPage(AsyncWebServerRequest *request) {
+  auto state = std::make_shared<UserPageStreamState>();
+ 
+  AsyncWebServerResponse *response = request->beginChunkedResponse(
+    "text/html",
+    [state](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+      size_t written = 0;
+ 
+      while (written < maxLen) {
+        // If our internal buffer is empty, generate the next piece of content.
+        if (state->bufferPos >= state->buffer.length()) {
+          state->buffer = "";
+          state->bufferPos = 0;
+ 
+          if (!state->headerSent) {
+            state->buffer = userPageHeaderHTML();
+            state->headerSent = true;
+          } else if (!state->done) {
+            // Find the next valid (non-deleted, non-empty) user, if any.
+            bool found = false;
+            while (state->i <= numOfUsers - 1) {
+              int idx = state->i;
+              state->i++;
+              if (idx <= numOfNames + 50 /* generous slack for skipped/deleted slots */
+                  && first[idx] != "deleted" && !first[idx].isEmpty()) {
+                state->buffer = userCardHTML(idx);
+                found = true;
+                break;
+              }
+              if (idx > numOfNames + 50) break; // safety stop
+            }
+            if (!found) {
+              state->done = true;
+            }
+          } else if (!state->footerSent) {
+            state->buffer = userPageFooterHTML();
+            state->footerSent = true;
+          } else {
+            // Nothing left to send.
+            break;
+          }
+        }
+ 
+        size_t remaining = state->buffer.length() - state->bufferPos;
+        if (remaining == 0) continue; // loop back to generate next piece
+        size_t toCopy = (remaining < (maxLen - written)) ? remaining : (maxLen - written);
+        memcpy(buffer + written, state->buffer.c_str() + state->bufferPos, toCopy);
+        state->bufferPos += toCopy;
+        written += toCopy;
+      }
+ 
+      return written;
+    });
+ 
+  request->send(response);
+}
 
 String generatePoursPage() {
   String poursPage = "\
@@ -732,10 +900,6 @@ void handleMainPage(AsyncWebServerRequest *request) {
   request->send(200, "text/html", generateMainPage());
 }
 
-void handleUserPage(AsyncWebServerRequest *request) {
-  request->send(200, "text/html", generateUserPage());
-}
-
 void handlePoursPage(AsyncWebServerRequest *request) {
   request->send(200, "text/html", generatePoursPage());
 }
@@ -750,8 +914,8 @@ void handleEditUserPage(AsyncWebServerRequest *request) {
 }
 
 void handleUpdatePage(AsyncWebServerRequest *request) {
-  request->send(200, "text/html", generateUserPage());
   readyToRefresh = true;
+  handleUserPage(request);
 }
 
 void handleCalibrateMeter(AsyncWebServerRequest *request) {
@@ -879,7 +1043,7 @@ void handleFirebase(String path, String value, AsyncWebServerRequest *request) {
   if (!Firebase.RTDB.setString(&fbdo, path, value)) {
     Serial.println("FAILED");
     Serial.println("REASON: " + fbdo.errorReason());
-    request->send(200, "text/html", generateUserPage());
+    request->send(200, "text/plain", "Firebase write failed: " + fbdo.errorReason());
     return;
   }
   Serial.println("PASSED");
@@ -943,7 +1107,7 @@ void handleNewUser(AsyncWebServerRequest *request) {
   peopleNumber[numOfNames] = lastNameRead;
   setPeopleStrings();
   syncNames = lastNameRead;
-  request->send(200, "text/html", generateUserPage());
+  handleUserPage(request);  // streams the updated user list back
 }
 
 
@@ -979,7 +1143,7 @@ void handleEditUser(AsyncWebServerRequest *request) {
   setPeopleStrings();
   syncNames = editIndex;
 
-  request->send(200, "text/html", generateUserPage());
+  handleUserPage(request); 
 }
 
 void handleDeleteUser(AsyncWebServerRequest *request) {
@@ -1002,7 +1166,7 @@ void handleDeleteUser(AsyncWebServerRequest *request) {
   setPeopleStrings();
   syncNames = deleteIndex;
   numOfNames--;
-  request->send(200, "text/html", generateUserPage());
+  handleUserPage(request); 
 }
 
 void handleDeletePour(AsyncWebServerRequest *request) {
@@ -1088,19 +1252,19 @@ void resetFlowMeter(int meterIndex) {
 
 void readCalibrationValues() {
   String path = "calibration";
-
+ 
   if (Firebase.RTDB.getString(&fbdo, path.c_str())) {
     if (fbdo.dataType() == "string") {
       String calibrationData = fbdo.stringData();
       int underscoreIndex = calibrationData.indexOf('_');
-
+ 
       if (underscoreIndex != -1) {
         String calibration1 = calibrationData.substring(0, underscoreIndex);
         String calibration2 = calibrationData.substring(underscoreIndex + 1);
-
+ 
         flowMeterCalibrations[0] = calibration1.toFloat();
         flowMeterCalibrations[1] = calibration2.toFloat();
-
+ 
         Serial.println("Read calibration data successfully!");
         Serial.print("Calibration 1: ");
         Serial.println(flowMeterCalibrations[0]);
@@ -1111,25 +1275,31 @@ void readCalibrationValues() {
       }
     }
   } else {
-    Serial.println("Error reading data from Firebase: " + fbdo.errorReason());
+    Serial.println("Calibration path not found, creating with defaults: " + fbdo.errorReason());
+    String defaultCal = String(flowMeterCalibrations[0]) + "_" + String(flowMeterCalibrations[1]);
+    if (Firebase.RTDB.setString(&fbdo, path.c_str(), defaultCal)) {
+      Serial.println("Created default calibration node: " + defaultCal);
+    } else {
+      Serial.println("Failed to create default calibration node: " + fbdo.errorReason());
+    }
   }
 }
 
 void readFlowNameString() {
   String path = "flowname";
-
+ 
   if (Firebase.RTDB.getString(&fbdo, path.c_str())) {
     if (fbdo.dataType() == "string") {
       String flownameData = fbdo.stringData();
       int underscoreIndex = flownameData.indexOf('_');
-
+ 
       if (underscoreIndex != -1) {
         String flowname1 = flownameData.substring(0, underscoreIndex);
         String flowname2 = flownameData.substring(underscoreIndex + 1);
-
+ 
         flowMeterNames[0] = flowname1;
         flowMeterNames[1] = flowname2;
-
+ 
         Serial.println("Read flow name data successfully!");
         Serial.print("Flow Meter Name 1: ");
         Serial.println(flowMeterNames[0]);
@@ -1140,23 +1310,28 @@ void readFlowNameString() {
       }
     }
   } else {
-    Serial.println("Error reading data from Firebase: " + fbdo.errorReason());
+    Serial.println("Flow name path not found, creating with defaults: " + fbdo.errorReason());
+    String defaultNames = flowMeterNames[0] + "_" + flowMeterNames[1];
+    if (Firebase.RTDB.setString(&fbdo, path.c_str(), defaultNames)) {
+      Serial.println("Created default flowname node: " + defaultNames);
+    } else {
+      Serial.println("Failed to create default flowname node: " + fbdo.errorReason());
+    }
   }
 }
-
-
+ 
 void readAmountValues() {
   String path = "amount";
-
+ 
   if (Firebase.RTDB.getString(&fbdo, path.c_str())) {
     if (fbdo.dataType() == "string") {
       String amountData = fbdo.stringData();
       int underscoreIndex = amountData.indexOf('_');
-      
+ 
       if (underscoreIndex != -1) {
         pumpVolume = amountData.substring(0, underscoreIndex).toInt();
         pumpVolume2 = amountData.substring(underscoreIndex + 1).toInt();
-
+ 
         Serial.println("Read Pump Volume data successfully!");
         Serial.print("Pump Volume 1: ");
         Serial.println(pumpVolume);
@@ -1167,125 +1342,178 @@ void readAmountValues() {
       }
     }
   } else {
-    Serial.println("Error reading data from Firebase: " + fbdo.errorReason());
+    Serial.println("Amount path not found, creating with defaults: " + fbdo.errorReason());
+    String defaultAmount = String(pumpVolume) + "_" + String(pumpVolume2);
+    if (Firebase.RTDB.setString(&fbdo, path.c_str(), defaultAmount)) {
+      Serial.println("Created default amount node: " + defaultAmount);
+    } else {
+      Serial.println("Failed to create default amount node: " + fbdo.errorReason());
+    }
   }
 }
-
+ 
 void readPeopleString() {
-    // Read numOfNames from Firebase
-    if (Firebase.RTDB.getString(&fbdo, "numOfNames")) {
-        if (fbdo.dataType() == "string") {
-            numOfNames = fbdo.stringData().toInt();  // Convert the string to an integer
-            Serial.print("Number of Names: ");
-            Serial.println(numOfNames);
-        }
+  // Read numOfNames from Firebase
+  if (Firebase.RTDB.getString(&fbdo, "numOfNames")) {
+    if (fbdo.dataType() == "string") {
+      numOfNames = fbdo.stringData().toInt();
+      Serial.print("Number of Names: ");
+      Serial.println(numOfNames);
+    }
+  } else {
+    Serial.println("numOfNames path not found, creating with default 0: " + fbdo.errorReason());
+    if (Firebase.RTDB.setString(&fbdo, "numOfNames", String(numOfNames))) {
+      Serial.println("Created default numOfNames node: 0");
     } else {
-        // If there's an error reading numOfNames, print the error and return
-        Serial.println("Error reading numOfNames from Firebase: " + fbdo.errorReason());
-        return;
+      Serial.println("Failed to create default numOfNames node: " + fbdo.errorReason());
     }
-
-    int foundNames = 0;
-    int i = 1;
-
-    while (foundNames < numOfNames && i < numOfUsers) {
-        String path = "people/people" + String(i);
-
-        if (Firebase.RTDB.getString(&fbdo, path.c_str())) {
-            if (fbdo.dataType() == "string") {
-                peopleString[foundNames + 1] = fbdo.stringData();
-                Serial.print("Person: ");
-                Serial.println(peopleString[foundNames + 1]);
-                peopleNumber[foundNames] = i;
-                Serial.println(peopleNumber[foundNames]);
-                foundNames++;
-                lastNameRead = i;  // Update lastNameRead to the current index
-            }
-        } else {
-            // Print error but continue to the next index
-            Serial.println("Error reading data from Firebase: " + fbdo.errorReason());
-        }
-
-        i++;
+    return; // Nothing else to read yet - no people exist
+  }
+ 
+  // Fetch the ENTIRE "people" node in one call
+  if (!Firebase.RTDB.getJSON(&fbdo, "people")) {
+    Serial.println("People node not found (no users yet): " + fbdo.errorReason());
+    return; // Not an error - just means no users have been added yet.
+            // The node itself gets created automatically the first time
+            // handleNewUser() writes a person to it.
+  }
+ 
+  FirebaseJson *json = fbdo.jsonObjectPtr();
+  size_t count = json->iteratorBegin();
+  Serial.print("People node child count: ");
+  Serial.println(count);
+ 
+  int foundNames = 0;
+  int maxIndexSeen = 0;
+ 
+  FirebaseJson::IteratorValue value;
+  for (size_t i = 0; i < count; i++) {
+    value = json->valueAt(i);
+    String key = value.key;
+    String numPart = key.substring(6); // strip "people"
+    int idx = numPart.toInt();
+    if (idx <= 0 || idx >= numOfUsers) continue;
+ 
+    String val = value.value;
+    if (val.length() >= 2 && val.startsWith("\"") && val.endsWith("\"")) {
+      val = val.substring(1, val.length() - 1);
     }
-
-    for (int j = 1; j <= foundNames; j++) {
-        int underscoreIndex1 = peopleString[j].indexOf('_');
-        int underscoreIndex2 = peopleString[j].indexOf('_', underscoreIndex1 + 1);
-        int underscoreIndex3 = peopleString[j].indexOf('_', underscoreIndex2 + 1);
-        int underscoreIndex4 = peopleString[j].indexOf('_', underscoreIndex3 + 1);
-        int underscoreIndex5 = peopleString[j].indexOf('_', underscoreIndex4 + 1);
-        int underscoreIndex6 = peopleString[j].indexOf('_', underscoreIndex5 + 1);
-        int underscoreIndex7 = peopleString[j].indexOf('_', underscoreIndex6 + 1);
-        int underscoreIndex8 = peopleString[j].indexOf('_', underscoreIndex7 + 1);
-
-        first[j] = peopleString[j].substring(0, underscoreIndex1);
-        last[j] = peopleString[j].substring(underscoreIndex1 + 1, underscoreIndex2);
-        uid[j] = peopleString[j].substring(underscoreIndex2 + 1, underscoreIndex3);
-        phone[j] = peopleString[j].substring(underscoreIndex3 + 1, underscoreIndex4);
-        beerUses[j] = peopleString[j].substring(underscoreIndex4 + 1, underscoreIndex5);
-        wineUses[j] = peopleString[j].substring(underscoreIndex5 + 1, underscoreIndex6);
-        status[j] = peopleString[j].substring(underscoreIndex6 + 1, underscoreIndex7);
-        wineCoupons[j] = peopleString[j].substring(underscoreIndex7 + 1, underscoreIndex8);
-        beerCoupons[j] = peopleString[j].substring(underscoreIndex8 + 1);
+ 
+    peopleString[foundNames + 1] = val;
+    peopleNumber[foundNames] = idx;
+    if (idx > maxIndexSeen) maxIndexSeen = idx;
+    foundNames++;
+ 
+    if ((i & 0x0F) == 0) {
+      vTaskDelay(1);
     }
-    lastNameRead++;
-
-    Serial.print("Last Name Read Index: ");
-    Serial.println(lastNameRead);
+  }
+  json->iteratorEnd();
+ 
+  lastNameRead = maxIndexSeen;
+ 
+  for (int j = 1; j <= foundNames; j++) {
+    int underscoreIndex1 = peopleString[j].indexOf('_');
+    int underscoreIndex2 = peopleString[j].indexOf('_', underscoreIndex1 + 1);
+    int underscoreIndex3 = peopleString[j].indexOf('_', underscoreIndex2 + 1);
+    int underscoreIndex4 = peopleString[j].indexOf('_', underscoreIndex3 + 1);
+    int underscoreIndex5 = peopleString[j].indexOf('_', underscoreIndex4 + 1);
+    int underscoreIndex6 = peopleString[j].indexOf('_', underscoreIndex5 + 1);
+    int underscoreIndex7 = peopleString[j].indexOf('_', underscoreIndex6 + 1);
+    int underscoreIndex8 = peopleString[j].indexOf('_', underscoreIndex7 + 1);
+ 
+    first[j] = peopleString[j].substring(0, underscoreIndex1);
+    last[j] = peopleString[j].substring(underscoreIndex1 + 1, underscoreIndex2);
+    uid[j] = peopleString[j].substring(underscoreIndex2 + 1, underscoreIndex3);
+    phone[j] = peopleString[j].substring(underscoreIndex3 + 1, underscoreIndex4);
+    beerUses[j] = peopleString[j].substring(underscoreIndex4 + 1, underscoreIndex5);
+    wineUses[j] = peopleString[j].substring(underscoreIndex5 + 1, underscoreIndex6);
+    status[j] = peopleString[j].substring(underscoreIndex6 + 1, underscoreIndex7);
+    wineCoupons[j] = peopleString[j].substring(underscoreIndex7 + 1, underscoreIndex8);
+    beerCoupons[j] = peopleString[j].substring(underscoreIndex8 + 1);
+  }
+ 
+  lastNameRead++;
+  Serial.print("Last Name Read Index: ");
+  Serial.println(lastNameRead);
 }
-
+ 
 void readPoursString() {
-    // Read numOfPours from Firebase
-    if (Firebase.RTDB.getString(&fbdo, "numOfPours")) {
-        if (fbdo.dataType() == "string") {
-            numOfPours = fbdo.stringData().toInt();  // Convert the string to an integer
-            Serial.print("Number of Pours: ");
-            Serial.println(numOfPours);
-        }
+  // Read numOfPours from Firebase
+  if (Firebase.RTDB.getString(&fbdo, "numOfPours")) {
+    if (fbdo.dataType() == "string") {
+      numOfPours = fbdo.stringData().toInt();
+      Serial.print("Number of Pours: ");
+      Serial.println(numOfPours);
+    }
+  } else {
+    Serial.println("numOfPours path not found, creating with default 0: " + fbdo.errorReason());
+    if (Firebase.RTDB.setString(&fbdo, "numOfPours", String(numOfPours))) {
+      Serial.println("Created default numOfPours node: 0");
     } else {
-        // If there's an error reading numOfPours, print the error and return
-        Serial.println("Error reading numOfPours from Firebase: " + fbdo.errorReason());
-        return;
+      Serial.println("Failed to create default numOfPours node: " + fbdo.errorReason());
     }
-
-    int foundPours = 0;
-    int i = 1;
-
-    while (foundPours < numOfPours && i < 200) {
-        String path = "pours/pour" + String(i);
-
-        if (Firebase.RTDB.getString(&fbdo, path.c_str())) {
-            if (fbdo.dataType() == "string") {
-                poursString[foundPours + 1] = fbdo.stringData();
-                Serial.print("Pour: ");
-                Serial.println(poursString[foundPours + 1]);
-                pourNumber[foundPours] = i;
-                Serial.println(pourNumber[foundPours]);
-                foundPours++;
-                lastPourRead = i;  // Update lastPourRead to the current index
-            }
-        } else {
-            // Print error but continue to the next index
-            Serial.println("Error reading data from Firebase: " + fbdo.errorReason());
-        }
-
-        i++;
+    return; // Nothing else to read yet - no pours exist
+  }
+ 
+  // Fetch the ENTIRE "pours" node in one call
+  if (!Firebase.RTDB.getJSON(&fbdo, "pours")) {
+    Serial.println("Pours node not found (no pours yet): " + fbdo.errorReason());
+    return; // Not an error - node gets created automatically on the first pour
+  }
+ 
+  FirebaseJson *json = fbdo.jsonObjectPtr();
+  size_t count = json->iteratorBegin();
+  Serial.print("Pours node child count: ");
+  Serial.println(count);
+ 
+  int foundPours = 0;
+  int maxIndexSeen = 0;
+ 
+  FirebaseJson::IteratorValue value;
+  for (size_t i = 0; i < count; i++) {
+    value = json->valueAt(i);
+    String key = value.key;
+    String numPart = key.substring(4); // strip "pour"
+    int idx = numPart.toInt();
+    if (idx <= 0 || idx >= 200) continue;
+ 
+    String val = value.value;
+    if (val.length() >= 2 && val.startsWith("\"") && val.endsWith("\"")) {
+      val = val.substring(1, val.length() - 1);
     }
-    lastPourRead++;
-    Serial.print("Last Pour Read Index: ");
-    Serial.println(lastPourRead);
+ 
+    poursString[foundPours + 1] = val;
+    pourNumber[foundPours] = idx;
+    if (idx > maxIndexSeen) maxIndexSeen = idx;
+    foundPours++;
+ 
+    if ((i & 0x0F) == 0) {
+      vTaskDelay(1);
+    }
+  }
+  json->iteratorEnd();
+ 
+  lastPourRead = maxIndexSeen;
+  lastPourRead++;
+  Serial.print("Last Pour Read Index: ");
+  Serial.println(lastPourRead);
 }
-
 
 void nfcCode() {
   timePassed = 0;
-  uint8_t success;
   uint8_t nfc_uid[7] = { 0, 0, 0, 0, 0, 0, 0 };
   uint8_t uidLength;
 
   // Reading an NFC card
-  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, nfc_uid, &uidLength);
+  uint8_t success = 0;
+  for (int attempt = 0; attempt < 3 && !success; attempt++) {
+    success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, nfc_uid, &uidLength, 500);
+    if (!success) {
+      esp_task_wdt_reset();
+      delay(50);
+    }
+  }
 
   if (success) {
     // Convert the UID into a string for comparison
@@ -1319,7 +1547,10 @@ void nfcCode() {
           consommations = (beerCoupons[i] + " CONSOMMATIONS RESTANTE");
         } else if (beerCoupons[i].toInt() == 0) {
           consommations = (beerCoupons[i] + " CONSOMMATION RESTANTE");
-          delay(4000);
+          for (int i = 0; i < 4000; i += 250) {
+            esp_task_wdt_reset();
+            delay(250);
+          }
           break;
         }
         continue1 = true;
@@ -1335,6 +1566,7 @@ void nfcCode() {
           }
 
           while (true) {
+            esp_task_wdt_reset();
             // Check if the button is pressed
             if (digitalRead(buttonResume) == LOW) {
               // Debounce delay
@@ -1345,6 +1577,7 @@ void nfcCode() {
                 // Check for hold
                 buttonPressTime = millis();
                 while (digitalRead(buttonResume) == LOW) {
+                  esp_task_wdt_reset(); 
                   if (millis() - buttonPressTime > holdTime) {
                     // Select the current option if button is held for the holdTime duration
                     delay(50); // Additional debounce delay
@@ -1410,6 +1643,7 @@ void setPeopleStrings() {
 TaskHandle_t nfcTaskHandle = NULL;
 
 void nfcTask(void *parameter) {
+  esp_task_wdt_add(NULL);
   for (;;) {
     if (nfcWorking && okToRead && timePassed > 1) {
       nfcCode();
@@ -1438,12 +1672,11 @@ void writeTask(void *parameter) {
         Serial.println(String(syncNames));
 
         if (peopleString[syncNames] == "deleted________") {
-            // Deleting the data from Firebase
             if (Firebase.RTDB.deleteNode(&fbdo, path.c_str())) {
                 Serial.println("Deleted Person Data Successfully");
             } else {
                 Serial.println("Error deleting data from Firebase, trying again in 5 seconds: " + fbdo.errorReason());
-                delay(5000);
+                vTaskDelay(5000 / portTICK_PERIOD_MS); // FIX: Replace delay() with vTaskDelay inside RTOS Tasks
                 if (Firebase.RTDB.deleteNode(&fbdo, path.c_str())) {
                     Serial.println("Deleted Person Data Successfully");
                 } else {
@@ -1451,13 +1684,12 @@ void writeTask(void *parameter) {
                 }
             }
         } else {
-            // Writing the data to Firebase
             if (Firebase.RTDB.setString(&fbdo, path.c_str(), String(peopleString[syncNames]))) {
                 Serial.println("Written Person Data Successfully");
                 Serial.println(String(peopleString[syncNames]));
             } else {
                 Serial.println("Error writing data to Firebase, trying again in 5 seconds: " + fbdo.errorReason());
-                delay(5000);
+                vTaskDelay(5000 / portTICK_PERIOD_MS); // FIX: Replace delay() with vTaskDelay inside RTOS Tasks
                 if (Firebase.RTDB.setString(&fbdo, path.c_str(), String(peopleString[syncNames]))) {
                     Serial.println("Written Person Data Successfully");
                     Serial.println(String(peopleString[syncNames]));
@@ -1469,6 +1701,7 @@ void writeTask(void *parameter) {
 
         syncNames = 0;
       }
+      
       if (syncPours > 0) {
         Serial.println("SETTING POUR DATA");
         Serial.println(String(syncPours));
@@ -1485,48 +1718,45 @@ void writeTask(void *parameter) {
 
         int pourValue = (index >= 0) ? pourNumber[index] : 0;
         String path = "pours/pour" + String(pourValue + 1);
-        Serial.println(path);  // To verify the output
+        Serial.println(path);  
 
-          Serial.println("WRITING POUR DATA TO FIREBASE. POUR STRING: ");
-          Serial.println(String(syncPours));
-          Serial.println(poursString[syncPours]);
-          Serial.println(pourNumber[syncPours - 1]);
+        Serial.println("WRITING POUR DATA TO FIREBASE. POUR STRING: ");
+        Serial.println(String(syncPours));
+        Serial.println(poursString[syncPours]);
+        Serial.println(pourNumber[syncPours - 1]);
 
-          if (poursString[syncPours] == "DeletePours") {
-              // Deleting the data from Firebase
-              if (Firebase.RTDB.deleteNode(&fbdo, path.c_str())) {
-                  Serial.println("Deleted Pour Data Successfully");
-              } else {
-                  Serial.println("Error deleting data from Firebase, trying again in 5 seconds: " + fbdo.errorReason());
-                  delay(5000);
-                  if (Firebase.RTDB.deleteNode(&fbdo, path.c_str())) {
-                      Serial.println("Deleted Pour Data Successfully");
-                  } else {
-                      Serial.println("Error deleting data from Firebase after second try: " + fbdo.errorReason());
-                  }
-              }
-          } else {
-              // Writing the data to Firebase
-              if (Firebase.RTDB.setString(&fbdo, path.c_str(), String(poursString[syncPours]))) {
-                  Serial.println("Written Pour Data Successfully");
-              } else {
-                  Serial.println("Error writing data to Firebase, trying again in 5 seconds: " + fbdo.errorReason());
-                  delay(5000);
-                  if (Firebase.RTDB.setString(&fbdo, path.c_str(), String(poursString[syncPours]))) {
-                      Serial.println("Written Pour Data Successfully");
-                  } else {
-                      Serial.println("Error writing data to Firebase after second try: " + fbdo.errorReason());
-                  }
-              }
-          }
+        if (poursString[syncPours] == "DeletePours") {
+            if (Firebase.RTDB.deleteNode(&fbdo, path.c_str())) {
+                Serial.println("Deleted Pour Data Successfully");
+            } else {
+                Serial.println("Error deleting data from Firebase, trying again in 5 seconds: " + fbdo.errorReason());
+                vTaskDelay(5000 / portTICK_PERIOD_MS); // FIX: Replace delay() with vTaskDelay inside RTOS Tasks
+                if (Firebase.RTDB.deleteNode(&fbdo, path.c_str())) {
+                    Serial.println("Deleted Pour Data Successfully");
+                } else {
+                    Serial.println("Error deleting data from Firebase after second try: " + fbdo.errorReason());
+                }
+            }
+        } else {
+            if (Firebase.RTDB.setString(&fbdo, path.c_str(), String(poursString[syncPours]))) {
+                Serial.println("Written Pour Data Successfully");
+            } else {
+                Serial.println("Error writing data to Firebase, trying again in 5 seconds: " + fbdo.errorReason());
+                vTaskDelay(5000 / portTICK_PERIOD_MS); // FIX: Replace delay() with vTaskDelay inside RTOS Tasks
+                if (Firebase.RTDB.setString(&fbdo, path.c_str(), String(poursString[syncPours]))) {
+                    Serial.println("Written Pour Data Successfully");
+                } else {
+                    Serial.println("Error writing data to Firebase after second try: " + fbdo.errorReason());
+                }
+            }
+        }
 
-          syncPours = 0;
+        syncPours = 0;
       }
 
       if (syncCalibration) {
         String calpath = "calibration";
         String calstring = String(flowMeterCalibrations[0]) + "_" + String(flowMeterCalibrations[1]);
-        // Update the user data in Firebase by marking it as deleted
         if (Firebase.RTDB.setString(&fbdo, calpath.c_str(), calstring)) {
           Serial.println("Calibration set successfully!");
         } else {
@@ -1538,7 +1768,6 @@ void writeTask(void *parameter) {
       if (syncFlowName) {
         String flownamepath = "flowname";
         String flownamestring = String(flowMeterNames[0]) + "_" + String(flowMeterNames[1]);
-        // Update the user data in Firebase by marking it as deleted
         if (Firebase.RTDB.setString(&fbdo, flownamepath.c_str(), flownamestring)) {
           Serial.println("Flow Names set successfully!");
         } else {
@@ -1552,7 +1781,6 @@ void writeTask(void *parameter) {
         String amountstring = String(pumpVolume) + "_" + String(pumpVolume2);
         Serial.print("STRING FOR AMOUNT: ");
         Serial.println(amountstring);
-        // Update the user data in Firebase by marking it as deleted
         if (Firebase.RTDB.setString(&fbdo, amountpath.c_str(), amountstring)) {
           Serial.println("Pump Volume set successfully!");
         } else {
@@ -1560,13 +1788,17 @@ void writeTask(void *parameter) {
         }
         syncAmount = false;
       }
+
+      // FIX 1: Slow down the task when Firebase is connected but nothing needs syncing (1-second sleep)
+      vTaskDelay(1000 / portTICK_PERIOD_MS); 
+
     } else {
       Serial.println("Firebase not ready, retrying...");
-      delay(5000);
+      vTaskDelay(5000 / portTICK_PERIOD_MS); // FIX 2: Never use delay() inside FreeRTOS tasks. Use vTaskDelay.
     }
-    vTaskDelay(100 / portTICK_PERIOD_MS);  // Adjust the delay as needed
   }
 }
+
 
 void IRAM_ATTR pulseCounter() {
   pulseCount++;
@@ -1578,6 +1810,16 @@ void IRAM_ATTR pulseCounter2() {
 
 void setup() {
   Serial.begin(115200);
+  
+  // --- Configure Watchdog Timer to prevent boot crashes during initialization ---
+  esp_task_wdt_config_t twdt_config = {
+    .timeout_ms = 30000, // Stretch threshold to 30 seconds for heavy string allocations
+    .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
+    .trigger_panic = true
+  };
+  esp_task_wdt_reconfigure(&twdt_config);
+  esp_task_wdt_add(NULL);
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED) {
@@ -1595,73 +1837,97 @@ void setup() {
   /* Assign the RTDB URL (required) */
   config.database_url = DATABASE_URL;
 
-  /* Sign up */
-  if (Firebase.signUp(&config, &auth, "", "")) {
-    Serial.println("Connected to Firebase Successfully");
-    signupOK = true;
-  } else {
-    Serial.printf("%s\n", config.signer.signupError.message.c_str());
-  }
+  auth.user.email = "esp@smarttap.com";
+  auth.user.password = FIREBASE_PASSWORD;
 
-  /* Assign the callback function for the long running token generation task */
-  config.token_status_callback = tokenStatusCallback;  //see addons/TokenHelper.h
+  // Assign the callback function for token generation status tracking
+  config.token_status_callback = tokenStatusCallback; // Uses TokenHelper.h
 
+  // Initialize the connection and handle automatic background login
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
 
-  Wire.begin();
+  Serial.println("Authenticating with Firebase...");
+  unsigned long timeout = millis();
 
-  // Route for root / web page
-  server.on("/", HTTP_GET, handleMainPage);
-  server.on("/calibrateMeter", HTTP_GET, handleCalibrateMeter);
-  server.on("/startCalibration", HTTP_POST, startCalibration);
-  server.on("/stopCalibration", HTTP_POST, stopCalibration);
-  server.on("/resetAll", HTTP_GET, handleResetAll);
-  server.on("/rename", HTTP_GET, handleFlowMeterRename);
-  server.on("/toggleValve", HTTP_GET, handleToggleValve);
-  server.on("/togglePump", HTTP_GET, handleTogglePump);
-  server.on("/pumpVolume", HTTP_GET, handlepumpVolume);
-  server.on("/toggleValve2", HTTP_GET, handleToggleValve2);
-  server.on("/togglePump2", HTTP_GET, handleTogglePump2);
-  server.on("/pumpVolume2", HTTP_GET, handlepumpVolume2);
-  server.on("/startPump", HTTP_GET, handleStartPump);
-  server.on("/startPump2", HTTP_GET, handleStartPump2);
-  server.on("/manageUsers", HTTP_GET, handleUserPage);
-  server.on("/pours", HTTP_GET, handlePoursPage);
-  server.on("/newUser", HTTP_GET, handleNewUser);
-  server.on("/editUser", HTTP_GET, handleEditUser);
-  server.on("/deleteUser", HTTP_GET, handleDeleteUser);
-  server.on("/deletePour", HTTP_GET, handleDeletePour);
-  server.on("/updatePage", HTTP_GET, handleUpdatePage);
-  server.on("/newUserPage", HTTP_GET, handleNewUserPage);
-  server.on("/editUserPage", HTTP_GET, handleEditUserPage);
+  if (Firebase.ready()) {
+      Serial.println("Connected to Firebase Successfully via Login!");
+      signupOK = true; 
+  } else {
+      Serial.println("Firebase authentication failed or timed out.");
+      // It will still try to connect dynamically in your void loop() via Firebase.ready()
+  }
 
-  // Start server
-  server.begin();
+  Serial.println("A: about to Wire.begin"); Serial.flush();
+Wire.begin();
+Serial.println("B: after Wire.begin, before server routes"); Serial.flush();
 
-  pinMode(valve_pin, OUTPUT);
-  digitalWrite(valve_pin, LOW);  // Initially, the valve is closed
-  pinMode(pump_pin, OUTPUT);
-  digitalWrite(pump_pin, LOW);  // Initially, the valve is closed
-    pinMode(valve_pin2, OUTPUT);
-  digitalWrite(valve_pin2, LOW);  // Initially, the valve is closed
-  pinMode(pump_pin2, OUTPUT);
-  digitalWrite(pump_pin2, LOW);  // Initially, the valve is closed
-  pinMode(buttonResume, INPUT_PULLUP);
-  pinMode(buttonStop, INPUT_PULLUP);
-  pinMode(SENSOR_PIN, INPUT_PULLUP);
-  pinMode(SENSOR_PIN2, INPUT_PULLUP);
+// Route for root / web page
+server.on("/", HTTP_GET, handleMainPage);
+server.on("/calibrateMeter", HTTP_GET, handleCalibrateMeter);
+server.on("/startCalibration", HTTP_POST, startCalibration);
+server.on("/stopCalibration", HTTP_POST, stopCalibration);
+server.on("/resetAll", HTTP_GET, handleResetAll);
+server.on("/rename", HTTP_GET, handleFlowMeterRename);
+server.on("/toggleValve", HTTP_GET, handleToggleValve);
+server.on("/togglePump", HTTP_GET, handleTogglePump);
+server.on("/pumpVolume", HTTP_GET, handlepumpVolume);
+server.on("/toggleValve2", HTTP_GET, handleToggleValve2);
+server.on("/togglePump2", HTTP_GET, handleTogglePump2);
+server.on("/pumpVolume2", HTTP_GET, handlepumpVolume2);
+server.on("/startPump", HTTP_GET, handleStartPump);
+server.on("/startPump2", HTTP_GET, handleStartPump2);
+server.on("/manageUsers", HTTP_GET, handleUserPage);
+server.on("/pours", HTTP_GET, handlePoursPage);
+server.on("/newUser", HTTP_GET, handleNewUser);
+server.on("/editUser", HTTP_GET, handleEditUser);
+server.on("/deleteUser", HTTP_GET, handleDeleteUser);
+server.on("/deletePour", HTTP_GET, handleDeletePour);
+server.on("/updatePage", HTTP_GET, handleUpdatePage);
+server.on("/newUserPage", HTTP_GET, handleNewUserPage);
+server.on("/editUserPage", HTTP_GET, handleEditUserPage);
 
-  attachInterrupt(digitalPinToInterrupt(SENSOR_PIN), pulseCounter, FALLING);
-  attachInterrupt(digitalPinToInterrupt(SENSOR_PIN2), pulseCounter2, FALLING);
-  // Initialize the time variable
-  oldTime = millis();
+Serial.println("C: routes registered, before server.begin"); Serial.flush();
 
-  readCalibrationValues();
-  readAmountValues();
-  readPeopleString();
-  readPoursString();
-  readFlowNameString();
+server.begin();
+
+Serial.println("D: after server.begin, before pinMode block"); Serial.flush();
+
+pinMode(valve_pin, OUTPUT);
+digitalWrite(valve_pin, LOW);
+pinMode(pump_pin, OUTPUT);
+digitalWrite(pump_pin, LOW);
+pinMode(valve_pin2, OUTPUT);
+digitalWrite(valve_pin2, LOW);
+pinMode(pump_pin2, OUTPUT);
+digitalWrite(pump_pin2, LOW);
+pinMode(buttonResume, INPUT_PULLUP);
+pinMode(buttonStop, INPUT_PULLUP);
+pinMode(SENSOR_PIN, INPUT_PULLUP);
+pinMode(SENSOR_PIN2, INPUT_PULLUP);
+
+Serial.println("E: before attachInterrupt"); Serial.flush();
+attachInterrupt(digitalPinToInterrupt(SENSOR_PIN), pulseCounter, FALLING);
+attachInterrupt(digitalPinToInterrupt(SENSOR_PIN2), pulseCounter2, FALLING);
+oldTime = millis();
+
+Serial.println("F: before readCalibrationValues"); Serial.flush();
+esp_task_wdt_reset();
+readCalibrationValues();
+Serial.println("G: after readCalibrationValues, before readAmountValues"); Serial.flush();
+esp_task_wdt_reset();
+readAmountValues();
+Serial.println("H: after readAmountValues, before readPeopleString"); Serial.flush();
+esp_task_wdt_reset();
+readPeopleString();
+Serial.println("I: after readPeopleString, before readPoursString"); Serial.flush();
+esp_task_wdt_reset();
+readPoursString();
+Serial.println("J: after readPoursString, before readFlowNameString"); Serial.flush();
+esp_task_wdt_reset();
+readFlowNameString();
+Serial.println("K: after readFlowNameString"); Serial.flush();
+esp_task_wdt_reset();
 
   // Initialize the NFC module
   nfc.begin();
@@ -1675,12 +1941,14 @@ void setup() {
     nfcWorking = true;
   }
 
+  // --- Add short timeout to prevent client.connect from blocking forever if host is offline ---
+  client.setTimeout(2); 
   if (!client.connect(host, port)) {
     Serial.println("Connection to server failed");
-    return;
+    // Removed the 'return;' statement so setup can finish initializing tasks even if server is down
+  } else {
+    Serial.println("Connected to the server");
   }
-
-  Serial.println("Connected to the server");
 
   wled(0, 25, 255);
 
@@ -1702,13 +1970,19 @@ void setup() {
     NULL,              // Parameter
     1,                 // Task priority
     &writeTaskHandle,  // Task handle
-    1                  // Core (0 or 1) to run the task on
+    0                  // Core (0 or 1) to run the task on
   );
 
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+
+  // --- Restore normal watchdog limit for standard execution ---
+  twdt_config.timeout_ms = 15000;
+  esp_task_wdt_reconfigure(&twdt_config);
+  Serial.println("Setup Complete");
 }
 
 void loop() {
+  esp_task_wdt_reset();
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
     Serial.println("Failed to obtain time");
@@ -1785,7 +2059,10 @@ void loop() {
       poursString[lastPourRead] = formattedPourSave;
       syncPours = lastPourRead;
       pourNumber[numOfPours] = lastPourRead;
-      delay(4000);
+      for (int i = 0; i < 4000; i += 250) {
+        esp_task_wdt_reset();
+        delay(250);
+      }
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("PASSEZ VOTRE TAG");
@@ -1865,7 +2142,10 @@ if (pumpRunning && tap == 1) {
       poursString[lastPourRead] = formattedPourSave;
       syncPours = lastPourRead;
       pourNumber[numOfPours] = lastPourRead;
-      delay(4000);
+      for (int i = 0; i < 4000; i += 250) {
+        esp_task_wdt_reset();
+        delay(250);
+      }
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("PASSEZ VOTRE TAG");
