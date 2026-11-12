@@ -205,10 +205,10 @@ The cancel button can interrupt the dispensing flow and turn off all pump/valve 
 |---|---|---|
 | 13 | Pump 1 / Beer | Relay-controlled output |
 | 23 | Valve 1 / Beer | Relay-controlled output |
-| 27 | Flow Sensor 1 | Interrupt pulse input |
+| 34 | Flow Sensor 1 | Interrupt pulse input |
 | 33 | Pump 2 / Wine | Relay-controlled output |
-| 32 | Valve 2 / Wine | Relay-controlled output |
-| 26 | Flow Sensor 2 | Interrupt pulse input |
+| 14 | Valve 2 / Wine | Relay-controlled output |
+| 35 | Flow Sensor 2 | Interrupt pulse input |
 
 ### I2C Bus
 
@@ -238,7 +238,7 @@ The cancel button can interrupt the dispensing flow and turn off all pump/valve 
 ```text
 smarttap/
 ├── firmware/
-│   ├── main.ino              # ESP32 firmware
+│   ├── firmware.ino          # ESP32 firmware
 │   └── secrets_template.h    # Safe config template; copy to secrets.h
 ├── dashboard/
 │   ├── esp32_dashboard_server.py
@@ -288,7 +288,7 @@ Fill in your local values:
 #define WLED_HOST      "192.168.x.x"
 ```
 
-Then flash `firmware/main.ino` to the ESP32.
+Then flash `firmware/firmware.ino` to the ESP32.
 
 ### 2. Python Dashboard
 

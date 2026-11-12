@@ -2,7 +2,6 @@
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 #include <SPI.h>
-#include <SD.h>
 #include <Adafruit_PN532.h>
 #include <LiquidCrystal_I2C.h>
 #include <Firebase_ESP_Client.h>
@@ -152,14 +151,6 @@ TaskHandle_t writeTaskHandle = NULL;
 // ============================================================================
 // Helpers
 // ============================================================================
-bool compareUIDs(const uint8_t *uid1, uint8_t len1, const uint8_t *uid2, uint8_t len2) {
-  if (len1 != len2) return false;
-  for (uint8_t i = 0; i < len1; i++) {
-    if (uid1[i] != uid2[i]) return false;
-  }
-  return true;
-}
-
 void setPeopleStrings() {
   for (int i = 1; i <= lastNameRead; i++) {
     peopleString[i] = first[i] + "_" + last[i] + "_" + uid[i] + "_" + phone[i] + "_" + beerUses[i] + "_" + wineUses[i] + "_" + status[i] + "_" + wineCoupons[i] + "_" + beerCoupons[i];

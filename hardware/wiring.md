@@ -8,10 +8,10 @@
 |---|---|---|
 | Pump 1 / Beer | GPIO 13 | Relay-controlled output |
 | Valve 1 / Beer | GPIO 23 | Relay-controlled output |
-| Flow Sensor 1 | GPIO 27 | Interrupt pulse input |
+| Flow Sensor 1 | GPIO 34 | Interrupt pulse input |
 | Pump 2 / Wine | GPIO 33 | Relay-controlled output |
-| Valve 2 / Wine | GPIO 32 | Relay-controlled output |
-| Flow Sensor 2 | GPIO 26 | Interrupt pulse input |
+| Valve 2 / Wine | GPIO 14 | Relay-controlled output |
+| Flow Sensor 2 | GPIO 35 | Interrupt pulse input |
 
 ### I2C Bus
 
